@@ -1,7 +1,7 @@
 --!nonstrict
 --[[
     =============================================================================
-                                PASTAWARE v3.02 MEGA
+                                PASTAWARE v3.0 MEGA
                   Universal & MM2 Combat / Visuals / Movement / Farm
     =============================================================================
     Merged & Unified from:
@@ -402,35 +402,57 @@ local function ErrorLogPushMirror()
     if #text > 8000 then text = text:sub(#text - 7999) end
     pcall(function() ErrorMirror.Value = text end)
 end
+local function ErrorLogDumpFull()
+    local head = string.format("=== PastaWare v%s dump %s place=%d ===",
+        tostring(PastaWare.Version), tostring(os.date("%Y-%m-%d %H:%M:%S")), game.PlaceId)
+    local take = {}
+    local from = math.max(1, #ErrorLog.lines - 199)
+    for i = from, #ErrorLog.lines do take[#take + 1] = ErrorLog.lines[i] end
+    return head .. "\n" .. table.concat(take, "\n") .. "\n"
+end
+
 local function ErrorLogTrace(message, stackTrace)
+    if Globals.__ERRLOG_ARMED then return end -- пишет standalone логгер
     local msg = tostring(message)
     if ErrorLogIsForeign(msg) then
         ErrorLog.skipped += 1
         return
     end
     local stamp = os.date("%H:%M:%S")
-    local key = tostring(message):sub(1, 120)
+    local key = msg:sub(1, 120)
     local now = os.clock()
     local slot = ErrorLog.counts[key]
-    if slot and now - slot.last < 5 then
-        slot.count += 1
-        return
-    end
+    local isNew = (slot == nil)
     local count = (slot and slot.count or 0) + 1
     ErrorLog.counts[key] = { last = now, count = count }
-    local line = string.format("[%s][x%d] %s || %s",
-        stamp, count, tostring(message), tostring(stackTrace):sub(1, 220))
+    local line = string.format("[%s][#%d] %s || %s",
+        stamp, count, msg, tostring(stackTrace):sub(1, 220))
     ErrorLog.lines[#ErrorLog.lines + 1] = line
-    if #ErrorLog.lines > 200 then table.remove(ErrorLog.lines, 1) end
+    if #ErrorLog.lines > 2000 then table.remove(ErrorLog.lines, 1) end
     ErrorLogAppendFile(line)
-    ErrorLogPushMirror()
-    warn("[PastaWare][ERR] " .. line)
+    ErrorLog.bytes = (ErrorLog.bytes or 0) + #line + 1
+    if ErrorLog.bytes > 300000 then
+        if typeof(writefile) == "function" then
+            pcall(writefile, ERR_FILE, "-- rotated " .. stamp .. "\n" .. ErrorLogDumpFull())
+        end
+        ErrorLog.bytes = 0
+    end
+    if isNew or now - (ErrorLog.lastMirror or 0) >= 1 then
+        ErrorLog.lastMirror = now
+        ErrorLogPushMirror()
+    end
+    if isNew or now - (ErrorLog.lastWarn or 0) >= 5 then
+        ErrorLog.lastWarn = now
+        warn("[PastaWare][ERR] " .. line)
+    end
 end
 function PastaWare.SaveErrors()
-    local head = string.format("=== PastaWare v%s dump %s place=%d ===",
-        tostring(PastaWare.Version), tostring(os.date("%Y-%m-%d %H:%M:%S")), game.PlaceId)
+    if Globals.__ERRLOG_ARMED then
+        print("[PastaWare] standalone ErrLog armed - use global SaveErrors()")
+        return
+    end
     if typeof(writefile) == "function" then
-        pcall(writefile, ERR_FILE, head .. "\n" .. table.concat(ErrorLog.lines, "\n") .. "\n")
+        pcall(writefile, ERR_FILE, ErrorLogDumpFull())
     end
     ErrorLogPushMirror()
     local keys = 0
@@ -447,9 +469,10 @@ function PastaWare.ClearErrorLog()
     ErrorLogPushMirror()
     print("[PastaWare] error log cleared.")
 end
-pcall(function()
-    ErrorLogEnsureFs()
-    ErrorLogPushMirror()
+if not Globals.__ERRLOG_ARMED then
+    pcall(function()
+        ErrorLogEnsureFs()
+        ErrorLogPushMirror()
     local head = string.format("=== PastaWare v%s session %s place=%d ===",
         tostring(PastaWare.Version), tostring(os.date("%Y-%m-%d %H:%M:%S")), game.PlaceId)
     ErrorLog.lines[#ErrorLog.lines + 1] = head
@@ -458,7 +481,8 @@ pcall(function()
     game:GetService("ScriptContext").Error:Connect(function(message, stackTrace, _sourceScript)
         ErrorLogTrace(message, stackTrace)
     end)
-end)
+    end)
+end
 
 
 --=============================================================================
