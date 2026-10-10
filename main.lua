@@ -1,7 +1,7 @@
 --!nonstrict
 --[[
     =============================================================================
-                                PASTAWARE v3.0 MEGA
+                                PASTAWARE v3.0 MEGA2
                   Universal & MM2 Combat / Visuals / Movement / Farm
     =============================================================================
     Merged & Unified from:
@@ -309,19 +309,44 @@ local function finiteNumber(value: any, fallback: number, minimum: number, maxim
     return n
 end
 
+-- Сейф-обёртки для урезанных API мобильных экзекуторов.
+-- На части сборок FindFirstChildOfClass/GetMouseLocation = nil.
+local function safeFindChild(obj: any, name: string)
+    if typeof(obj) ~= "Instance" then return nil end
+    local ok, res = pcall(function() return obj:FindFirstChild(name) end)
+    if ok then return res end
+    return nil
+end
+local function safeFindChildOfClass(obj: any, className: string)
+    if typeof(obj) ~= "Instance" then return nil end
+    local ok, res = pcall(function() return obj:FindFirstChildOfClass(className) end)
+    if ok then return res end
+    return nil
+end
+local function safeGetMouseLocation(): Vector2
+    local ok, res = pcall(function() return UserInputService:GetMouseLocation() end)
+    if ok and typeof(res) == "Vector2" then return res end
+    local cam = Workspace.CurrentCamera
+    if cam then
+        local vs = cam.ViewportSize
+        return Vector2.new(vs.X / 2, vs.Y / 2)
+    end
+    return Vector2.new(0, 0)
+end
+
 local function isAlive(player: Player?): boolean
     local plr = player or LocalPlayer
     if not plr or not plr.Parent then return false end
     local char = plr.Character
     if not char or not char.Parent then return false end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    local root = char:FindFirstChild("HumanoidRootPart")
+    local hum = safeFindChildOfClass(char, "Humanoid")
+    local root = safeFindChild(char, "HumanoidRootPart")
     return (hum ~= nil and hum.Health > 0 and root ~= nil)
 end
 
 local function getLocalRoot(): BasePart?
     local char = LocalPlayer and LocalPlayer.Character
-    return char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+    return safeFindChild(char, "HumanoidRootPart") :: BasePart?
 end
 
 local function getTargetRoot(player: Player): BasePart?
@@ -333,9 +358,9 @@ local function getStrictLivingPlayer(player: Player?): (Model?, BasePart?)
     if player == nil or not player.Parent then return nil, nil end
     local char = player.Character
     if char == nil or not char.Parent then return nil, nil end
-    local hum = char:FindFirstChildOfClass("Humanoid")
+    local hum = safeFindChildOfClass(char, "Humanoid")
     if hum == nil or hum.Health <= 0 then return nil, nil end
-    local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
+    local root = safeFindChild(char, "HumanoidRootPart") or safeFindChild(char, "Torso")
     if root == nil or not root:IsA("BasePart") then return nil, nil end
     return char, root :: BasePart
 end
@@ -644,7 +669,7 @@ local function samplePlayerMotion(player: Player, root: BasePart)
     local calcAcc = (newest.velocity - oldest.velocity) / dt
 
     local char = player.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local hum = char and safeFindChildOfClass(char, "Humanoid")
     local airborne = hum and (hum:GetState() == Enum.HumanoidStateType.Freefall or hum:GetState() == Enum.HumanoidStateType.Jumping) or false
 
     VelocityHistory[player] = {
@@ -706,7 +731,7 @@ local function pickAimbotTarget(): (Player?, BasePart?)
     local bestPlayer: Player? = nil
     local bestPart: BasePart? = nil
     local shortestDist = math.huge
-    local mousePos = UserInputService:GetMouseLocation()
+    local mousePos = safeGetMouseLocation()
 
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and isAlive(player) then
@@ -884,6 +909,10 @@ local function createESPForPlayer(player: Player)
     }
 
     if HasDrawing then
+        local probeOk = pcall(function() Drawing.new("Line"):Remove() end)
+        if not probeOk then HasDrawing = false end
+    end
+    if HasDrawing then
         -- 8 линий для Corner Box или 4 для стандартного
         for i = 1, 8 do
             local line = Drawing.new("Line")
@@ -994,7 +1023,7 @@ local function renderESP()
     -- Обновление круга FOV
     if FOVCircle then
         if PastaWare.Config.Aimbot.Enabled and PastaWare.Config.Aimbot.ShowFOV then
-            local mouse = UserInputService:GetMouseLocation()
+            local mouse = safeGetMouseLocation()
             FOVCircle.Position = mouse
             FOVCircle.Radius = PastaWare.Config.Aimbot.FieldOfView
             FOVCircle.Color = PastaWare.Config.Aimbot.FOVColor
@@ -1010,8 +1039,8 @@ local function renderESP()
 
     for player, esp in pairs(ESPObjects) do
         local char = player.Character
-        local root = char and char:FindFirstChild("HumanoidRootPart")
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local root = char and safeFindChild(char, "HumanoidRootPart")
+        local hum = char and safeFindChildOfClass(char, "Humanoid")
 
         local show = PastaWare.Config.Visuals.Enabled and isAlive(player) and root ~= nil and hum ~= nil
 
@@ -1021,7 +1050,7 @@ local function renderESP()
 
             if HasDrawing then
                 local rootPos, onScreen = Camera:WorldToViewportPoint(root.Position)
-                local head = char:FindFirstChild("Head")
+                local head = char and safeFindChild(char, "Head")
                 local headPos = head and Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.6, 0)) or rootPos
 
                 if onScreen then
@@ -1071,7 +1100,7 @@ local function renderESP()
                         if PastaWare.Config.Visuals.TracerOrigin == "Middle" then
                             origin = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
                         elseif PastaWare.Config.Visuals.TracerOrigin == "Mouse" then
-                            origin = UserInputService:GetMouseLocation()
+                            origin = safeGetMouseLocation()
                         end
                         esp.Tracer.From = origin
                         esp.Tracer.To = Vector2.new(rootPos.X, rootPos.Y + height / 2)
@@ -1169,7 +1198,7 @@ local function cleanupFly()
         FlyBodyGyro = nil
     end
     local char = LocalPlayer.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local hum = char and safeFindChildOfClass(char, "Humanoid")
     if hum then
         hum.PlatformStand = false
     end
@@ -1177,7 +1206,7 @@ end
 
 local function updateFly()
     local char = LocalPlayer.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local hum = char and safeFindChildOfClass(char, "Humanoid")
     local root = char and char:FindFirstChild("HumanoidRootPart")
 
     if not PastaWare.Config.Movement.Fly or not hum or not root or hum.Health <= 0 then
@@ -1272,7 +1301,7 @@ end))
 -- Infinite Jump (бесконечный прыжок)
 addConnection(UserInputService.JumpRequest:Connect(function()
     if PastaWare.Config.Movement.InfiniteJump and isAlive(LocalPlayer) then
-        local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        local hum = LocalPlayer.Character and safeFindChildOfClass(LocalPlayer.Character, "Humanoid")
         if hum then
             hum:ChangeState(Enum.HumanoidStateType.Jumping)
         end
@@ -1282,7 +1311,7 @@ end))
 -- Скорость бега и сила прыжка
 addConnection(RunService.Heartbeat:Connect(function()
     local char = LocalPlayer.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local hum = char and safeFindChildOfClass(char, "Humanoid")
     if hum and hum.Health > 0 then
         if PastaWare.Config.Movement.WalkSpeedEnabled then
             hum.WalkSpeed = PastaWare.Config.Movement.WalkSpeed
@@ -2277,7 +2306,7 @@ do
         for _, plr in ipairs(Players:GetPlayers()) do
             local role = Pulse_ResolveRoleSimple(plr) or PastaWare.State.Roles[plr.Name] or "Innocent"
             local char = plr.Character
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            local hum = char and safeFindChildOfClass(char, "Humanoid")
             roster[plr.Name] = {
                 Role = role,
                 Dead = (hum ~= nil and hum.Health <= 0),
@@ -2411,7 +2440,7 @@ do
     --=========================================================================
     local function Pulse_FindTradeRequestGui(): Instance?
         local ok, res = pcall(function()
-            local pg = LocalPlayer and LocalPlayer:FindFirstChildOfClass("PlayerGui")
+            local pg = safeFindChildOfClass(LocalPlayer, "PlayerGui")
             local main = pg and pg:FindFirstChild("MainGUI")
             local g = main and main:FindFirstChild("Game")
             local lb = g and g:FindFirstChild("Leaderboard")
@@ -2538,17 +2567,17 @@ do
         if not plr or not plr.Parent then return false end
         local ch = plr.Character
         if not ch or not ch.Parent then return false end
-        local hum = ch:FindFirstChildOfClass("Humanoid")
-        local root = ch:FindFirstChild("HumanoidRootPart")
+        local hum = safeFindChildOfClass(ch, "Humanoid")
+        local root = safeFindChild(ch, "HumanoidRootPart")
         return hum ~= nil and hum.Health > 0 and root ~= nil
     end
     local function Candy_GetRoot(plr)
         local ch = plr and plr.Character
-        return ch and ch:FindFirstChild("HumanoidRootPart")
+        return ch and safeFindChild(ch, "HumanoidRootPart")
     end
     local function Candy_GetHum(plr)
         local ch = plr and plr.Character
-        return ch and ch:FindFirstChildOfClass("Humanoid")
+        return ch and safeFindChildOfClass(ch, "Humanoid")
     end
     Candy.IsAlive = Candy_IsAlive
 
@@ -2581,7 +2610,7 @@ do
         local cam = Workspace.CurrentCamera
         local lroot = Candy_GetRoot(LocalPlayer)
         if not cam or not lroot then return nil, nil end
-        local mouse = UserInputService:GetMouseLocation()
+        local mouse = safeGetMouseLocation()
         local best, bestPart, bestScore = nil, nil, math.huge
         for _, plr in ipairs(Players:GetPlayers()) do
             if plr ~= LocalPlayer and Candy_IsAlive(plr) then
@@ -2823,7 +2852,7 @@ do
     end
     function CrosshairSys:EnsureGui()
         if self.gui and self.gui.Parent then return end
-        local parent = LocalPlayer and LocalPlayer:FindFirstChildOfClass("PlayerGui")
+        local parent = safeFindChildOfClass(LocalPlayer, "PlayerGui")
         if not parent then return end
         local sg = Instance.new("ScreenGui")
         sg.Name = "PastaWare_Crosshair"
@@ -3124,7 +3153,7 @@ do
         if not Candy_IsAlive(LocalPlayer) then return end
         local now = os.clock()
         if now - self.lastFire < (PastaWare.Config.TriggerBot.Delay or 0.12) then return end
-        local mouse = UserInputService:GetMouseLocation()
+        local mouse = safeGetMouseLocation()
         local cam = Workspace.CurrentCamera
         if not cam then return end
         local ray = cam:ScreenPointToRay(mouse.X, mouse.Y)
@@ -3143,7 +3172,7 @@ do
                 end
                 self.lastFire = now
                 local char = LocalPlayer.Character
-                local tool = char and char:FindFirstChildOfClass("Tool")
+                local tool = char and safeFindChildOfClass(char, "Tool")
                 if tool then pcall(function() tool:Activate() end) end
             end
         end
@@ -3292,7 +3321,7 @@ do
                     if troot and (troot.Position - lroot.Position).Magnitude <= (PastaWare.Config.Misc.AutoParryDistance or 18) then
                         self.lastUse = now
                         local char = LocalPlayer.Character
-                        local tool = char and char:FindFirstChildOfClass("Tool")
+                        local tool = char and safeFindChildOfClass(char, "Tool")
                         if tool then pcall(function() tool:Activate() end) end
                         break
                     end
@@ -3466,7 +3495,7 @@ do
                 cached.gui.Enabled = (head ~= nil) and (plr ~= LocalPlayer)
                 -- обновить текст оружия
                 if PastaWare.Config.ESPEx.WeaponESP and char then
-                    local tool = char:FindFirstChildOfClass("Tool")
+                    local tool = char and safeFindChildOfClass(char, "Tool")
                     cached.sub.Text = tool and ("[" .. tool.Name .. "]") or ""
                 else
                     cached.sub.Text = ""
@@ -3489,7 +3518,7 @@ do
         if not plr or not plr.Parent then return false end
         local ch = plr.Character
         if not ch then return false end
-        local h = ch:FindFirstChildOfClass("Humanoid")
+        local h = ch and safeFindChildOfClass(ch, "Humanoid")
         return h ~= nil and h.Health > 0
     end
     PastaWare.Pulse.UpdateAllBillboards = Pulse_UpdateAllBillboards
@@ -3648,7 +3677,7 @@ do
         end
         if showXhair then return end
         if not CustomCursor or not CustomCursor.Parent then
-            local parent = LocalPlayer and LocalPlayer:FindFirstChildOfClass("PlayerGui")
+            local parent = safeFindChildOfClass(LocalPlayer, "PlayerGui")
             if not parent then return end
             local sg = parent:FindFirstChild("PastaWare_Cursor")
             if not sg then
@@ -3669,7 +3698,7 @@ do
             c.Parent = f
             CustomCursor = f
         end
-        local m = UserInputService:GetMouseLocation()
+        local m = safeGetMouseLocation()
         CustomCursor.Position = UDim2.fromOffset(m.X, m.Y)
     end
     PastaWare.Pulse.MoveCustomCursor = Pulse_MoveCustomCursor
@@ -3754,7 +3783,7 @@ do
             return
         end
         local char = LocalPlayer.Character
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local hum = char and safeFindChildOfClass(char, "Humanoid")
         local root = char and char:FindFirstChild("HumanoidRootPart")
         if not (hum and root and hum.Health > 0) then return end
         pcall(function()
@@ -3928,7 +3957,7 @@ do
         if (snap.LocalRootPosition - snap.OriginPosition).Magnitude > MAX_SNAP_DIST then return false end
         -- цель живая
         local tchar = snap.Player and snap.Player.Character
-        local thum = tchar and tchar:FindFirstChildOfClass("Humanoid")
+        local thum = tchar and safeFindChildOfClass(tchar, "Humanoid")
         local troot = tchar and tchar:FindFirstChild("HumanoidRootPart")
         if not tchar or not thum or thum.Health <= 0 or not troot then return false end
         if tchar ~= snap.Character or troot ~= snap.RootPart then return false end
@@ -4006,7 +4035,7 @@ do
         local char = LocalPlayer.Character
         local origin = char and char:FindFirstChild("HumanoidRootPart")
         if cam == nil or origin == nil then return nil end
-        local hum = char:FindFirstChildOfClass("Humanoid")
+        local hum = char and safeFindChildOfClass(char, "Humanoid")
         if not hum or hum.Health <= 0 then return nil end
         local look = cam.CFrame.LookVector
         local conic = 45
@@ -4017,7 +4046,7 @@ do
             if plr ~= LocalPlayer then
                 local c = plr.Character
                 local r = c and c:FindFirstChild("HumanoidRootPart")
-                local h = c and c:FindFirstChildOfClass("Humanoid")
+                local h = c and safeFindChildOfClass(c, "Humanoid")
                 if c and r and h and h.Health > 0 then
                     local delta = r.Position - origin.Position
                     local dist = delta.Magnitude
@@ -4217,7 +4246,7 @@ function PastaWare:Unload()
     end)
     -- курсор/кросхейр GUI
     pcall(function()
-        local pg = LocalPlayer and LocalPlayer:FindFirstChildOfClass("PlayerGui")
+        local pg = safeFindChildOfClass(LocalPlayer, "PlayerGui")
         if pg then
             local c = pg:FindFirstChild("PastaWare_Cursor")
             if c then c:Destroy() end
@@ -4527,7 +4556,7 @@ local function getLivingPlayer(player: Player): (Model?, BasePart?)
 	if not character then
 		return nil, nil
 	end
-	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local humanoid = safeFindChildOfClass(character, "Humanoid")
 	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if humanoid == nil or humanoid.Health <= 0 or root == nil or not root.Parent then
 		return nil, nil
@@ -4550,7 +4579,7 @@ end
 
 local function isAlive(): boolean
 	local character = getLocalCharacter()
-	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local humanoid = character and safeFindChildOfClass(character, "Humanoid")
 	return humanoid ~= nil and humanoid.Health > 0
 end
 
@@ -6006,7 +6035,7 @@ do
             end
             local dead = rec ~= nil and (rec.Dead == true or rec.Killed == true)
             local char = plr.Character
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            local hum = char and safeFindChildOfClass(char, "Humanoid")
             local target = char and (char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart"))
             local alive = (not dead) and char ~= nil and hum ~= nil and hum.Health > 0
             local color = (role == "Murderer" and PastaWare.Config.Visuals.MurdererColor)
@@ -6205,7 +6234,8 @@ do
             for _, plr in ipairs(Players:GetPlayers()) do
                 local role = PastaWare.State.Roles[plr.Name]
                 if (role == "Sheriff" or role == "Hero") and plr.Character then
-                    local tool = plr.Character:FindFirstChildOfClass("Tool")
+                    local tchar = plr.Character
+                    local tool = tchar and safeFindChildOfClass(tchar, "Tool")
                     local handle = tool and tool:FindFirstChild("Handle")
                     if handle and handle:IsA("BasePart") then
                         GunESPPart = handle
@@ -6560,7 +6590,7 @@ do
             return
         end
         local char = LocalPlayer.Character
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local hum = char and safeFindChildOfClass(char, "Humanoid")
         local root = char and char:FindFirstChild("HumanoidRootPart")
         if mv.Spin then
             if hum and root and hum.Health > 0 then
@@ -6641,7 +6671,7 @@ do
         if not isOn then return end
         local char = LocalPlayer.Character
         local root = char and char:FindFirstChild("HumanoidRootPart")
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local hum = char and safeFindChildOfClass(char, "Humanoid")
         if not (root and hum and hum.Health > 0) then return end
         local stateNow
         pcall(function() stateNow = hum:GetState() end)
@@ -6708,7 +6738,7 @@ do
         if not PastaWare.Config.ESPEx.FollowTarget then return end
         local char = LocalPlayer.Character
         local root = char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Head"))
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local hum = char and safeFindChildOfClass(char, "Humanoid")
         local cam = Workspace.CurrentCamera
         if not (root and hum and hum.Health > 0 and cam) then return end
         local sp, onScreen = cam:WorldToViewportPoint(root.Position)
@@ -6746,7 +6776,7 @@ do
             MouseHL = Instance.new("Highlight")
             MouseHL.Parent = CoreGui
         end
-        local mouse = UserInputService:GetMouseLocation()
+        local mouse = safeGetMouseLocation()
         local hit = pickFn(mouse.X, mouse.Y)
         MouseHL.Adornee = hit
         if hit then
@@ -6951,8 +6981,8 @@ do
         return #swaps
     end
     local function Pulse_RetargetAnims(char: Model, pack, S, loadTrackFn, onError)
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        local animator = hum and hum:FindFirstChildOfClass("Animator")
+        local hum = char and safeFindChildOfClass(char, "Humanoid")
+        local animator = hum and safeFindChildOfClass(hum, "Animator")
         if not hum or not animator then return false end
         local token = os.clock() + math.random()
         S.token = token
