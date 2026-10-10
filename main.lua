@@ -1,7 +1,7 @@
 --!nonstrict
 --[[
     =============================================================================
-                                PASTAWARE v3.0 MEGA
+                                PASTAWARE v3.01 MEGA
                   Universal & MM2 Combat / Visuals / Movement / Farm
     =============================================================================
     Merged & Unified from:
@@ -989,7 +989,9 @@ local function renderESP()
                         if esp.HealthBarOutline then esp.HealthBarOutline.Visible = false end
                     end
                 else
-                    for i = 1, 8 do esp.BoxLines[i].Visible = false end
+                    if HasDrawing then
+                        for i = 1, 8 do esp.BoxLines[i].Visible = false end
+                    end
                     if esp.Tracer then esp.Tracer.Visible = false end
                     if esp.NameTag then esp.NameTag.Visible = false end
                     if esp.DistTag then esp.DistTag.Visible = false end
