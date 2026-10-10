@@ -1,7 +1,7 @@
 --!nonstrict
 --[[
     =============================================================================
-                                PASTAWARE v3.1 MEGA
+                                PASTAWARE v3.0 MEGA
                   Universal & MM2 Combat / Visuals / Movement / Farm
     =============================================================================
     Merged & Unified from:
@@ -5275,6 +5275,8 @@ do
     local Pulse_GetPlayerDataRoster = PastaWare.Pulse.GetPlayerDataRoster
     local Pulse_IsValidTargetPart = PastaWare.Pulse.IsValidTargetPart
 
+    do -- 13.1 scope: крипто/фабрики/утилиты (все локали умирают на его end)
+
     --=========================================================================
     -- 13.1a h (8037) BigPowMod — square-and-multiply по битам экспоненты.
     -- Оригинал: C=старший установленный бит; e={1}; B=a(f,F); по битам:
@@ -5572,6 +5574,9 @@ do
     PastaWare.Pulse.ClearWobble = Pulse_ClearWobble
     PastaWare.Pulse.ClearChamsData = Pulse_ClearChamsData
 
+    end -- end 13.1 scope
+
+    do -- 13.2 scope: сеть-референс/текст/радио
     --=========================================================================
     -- 13.2a L (4132) SignRequest — подпись X-Pulse-HWID/TS/Nonce/Env/Sig.
     --   Sig = HMAC(Method.."\n"..path.."\n"..TS.."\n"..Nonce.."\n"..HWID.."\n"..Env.."\n"..Body).
@@ -5732,6 +5737,9 @@ do
     PastaWare.Pulse.RadioTicker = Pulse_RadioTicker
     PastaWare.Pulse.SetScaledVolume = Pulse_SetScaledVolume
 
+    end -- end 13.2 scope
+
+    do -- 13.3 scope: мастер-ESP + GunESP
     --=========================================================================
     -- 13.3a LP (8449) RenderRoleESPFull — ГЛАВНЫЙ рендер Pulse:
     -- rolesp.on gate; Hero-промоция (Innocent+Gun); Dead/Killed пропуск;
@@ -6094,6 +6102,27 @@ do
     end
     PastaWare.Pulse.RenderGunESP = Pulse_RenderGunESP
 
+    local function Pulse_CleanupFullESP()
+        for plr, hl in pairs(RoleHL) do pcall(function() hl:Destroy() end) end
+        for plr, kit in pairs(RoleKits) do
+            pcall(function() if kit.gui then kit.gui:Destroy() end end)
+            if kit.lines then
+                for _, l in ipairs(kit.lines) do
+                    pcall(function() if l.Remove then l:Remove() end end)
+                end
+            end
+            if kit.tracer then pcall(function() kit.tracer:Destroy() end) end
+            if kit.bones then
+                for _, b in ipairs(kit.bones) do pcall(function() b:Destroy() end) end
+            end
+        end
+        if GunESPGui then pcall(function() GunESPGui:Destroy() end) end
+    end
+    PastaWare.Pulse.CleanupFullESP = Pulse_CleanupFullESP
+
+    end -- end 13.3 scope
+
+    do -- 13.4 scope: chams/xray/оптимизация/noclip
     --=========================================================================
     -- 13.4a YP (6844) ForceFieldAll + ClearCharMats + y (8402) ForceChams.
     -- YP: бэкап {Material,Color} -> ForceField+цвет. y: то же с packed-RGB
@@ -6370,6 +6399,9 @@ do
     PastaWare.Pulse.NoclipPro = Pulse_NoclipPro
     PastaWare.Pulse.NoclipProDirty = Pulse_NoclipProDirty
 
+    end -- end 13.4 scope
+
+    do -- 13.5 scope: движение/оверлеи/инвентарь/анимации/утилиты
     --=========================================================================
     -- 13.5a SP (9309) SpinBhop — спинбот (AutoRotate=false, rotate dt*speed)
     -- + баннихоп-цепочка (AssemblyLinearVelocity, кап max(WalkSpeed*(2+0.4*x),100)).
@@ -6583,6 +6615,12 @@ do
     PastaWare.Pulse.UniversalAim = Pulse_UniversalAim
     PastaWare.Pulse.StretchFX = Pulse_StretchFX
     PastaWare.Pulse.MouseHighlight = Pulse_MouseHighlight
+
+    local function Pulse_CleanupOverlays()
+        if PerfGui then pcall(function() PerfGui:Destroy() end) end
+        if MouseHL then pcall(function() MouseHL:Destroy() end) end
+    end
+    PastaWare.Pulse.CleanupOverlays = Pulse_CleanupOverlays
 
     --=========================================================================
     -- 13.6a QP (7304) FpsPing — FPS (кадры/0.25с) + пинг, сглаживание dt*9,
@@ -6929,7 +6967,7 @@ do
             if now - (entry.wobAt or 0) < 2 then return end
         end
         entry.wobAt = now
-        Pulse_ClearWobble(entry)
+        PastaWare.Pulse.ClearWobble(entry)
         entry.wobSig = sig
         if opts then
             local build = Globals.__pulseWobBuild
@@ -7045,6 +7083,9 @@ do
     PastaWare.Pulse.ScaledFire = Pulse_ScaledFire
     PastaWare.Pulse.FindRoundClient = Pulse_FindRoundClient
 
+    end -- end 13.5 scope
+
+    do -- 13.6 scope: VM-каталог + wiring + Unload-довесок
     --=========================================================================
     -- 13.9 VM-каталог: честная карта НЕпортированного. Это потроха Luraph-VM
     -- (конвейер x: AT->I9->H9->O9->K9->d9->m9->h9->D9->T9->S9->k9->H3->O3->L0->u0->Q0),
@@ -7158,31 +7199,12 @@ do
         local prevUnload = PastaWare.Unload
         function PastaWare:Unload()
             prevUnload(self)
-            pcall(function()
-                for plr, hl in pairs(RoleHL) do pcall(function() hl:Destroy() end) end
-                for plr, kit in pairs(RoleKits) do
-                    pcall(function() if kit.gui then kit.gui:Destroy() end end)
-                    if kit.lines then
-                        for _, l in ipairs(kit.lines) do
-                            pcall(function() if l.Remove then l:Remove() end end)
-                        end
-                    end
-                    if kit.tracer then pcall(function() kit.tracer:Destroy() end) end
-                    if kit.bones then
-                        for _, b in ipairs(kit.bones) do pcall(function() b:Destroy() end) end
-                    end
-                end
-                if GunESPGui then pcall(function() GunESPGui:Destroy() end) end
-                GunESPGui = nil
-                GunESPPart = nil
-                Pulse_ClearXray()
-                Pulse_ClearCharMats(nil)
-                if PerfGui then pcall(function() PerfGui:Destroy() end) end
-                PerfGui = nil
-                if MouseHL then pcall(function() MouseHL:Destroy() end) end
-                MouseHL = nil
-            end)
+            pcall(function() PastaWare.Pulse.CleanupFullESP() end)
+            pcall(function() PastaWare.Pulse.ClearXray() end)
+            pcall(function() PastaWare.Pulse.ClearCharMats(nil) end)
+            pcall(function() PastaWare.Pulse.CleanupOverlays() end)
         end
+    end
     end
 end
 -- 13. FULL DEOB END
