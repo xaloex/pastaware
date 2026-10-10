@@ -1,7 +1,7 @@
 --!nonstrict
 --[[
     =============================================================================
-                                PASTAWARE v3.0 MEGA
+                                PASTAWARE v3.02 MEGA
                   Universal & MM2 Combat / Visuals / Movement / Farm
     =============================================================================
     Merged & Unified from:
@@ -348,9 +348,19 @@ end
 
 -- Лог ошибок: файл PastaWare/error.txt (executor FS) + зеркало
 -- Workspace/PastaWare/"error.txt" (StringValue). Спам давится (1 строка/5 сек).
-local ErrorLog = { lines = {}, counts = {} }
+local ErrorLog = { lines = {}, counts = {}, skipped = 0 }
 local ERR_FILE = "PastaWare/error.txt"
 local ErrorMirror = nil
+-- Чужие пути: ошибки игровых скриптов не логируем (только чанки/эксплойты).
+local function ErrorLogIsForeign(msg: string): boolean
+    return (msg:find("PlayerScripts", 1, true) ~= nil)
+        or (msg:find("PlayerGui", 1, true) ~= nil)
+        or (msg:find("Replicated", 1, true) ~= nil)
+        or (msg:find("PlayerModule", 1, true) ~= nil)
+        or (msg:find("Workspace.", 1, true) ~= nil)
+        or (msg:find("Backpack", 1, true) ~= nil)
+        or (msg:find("Starter", 1, true) ~= nil)
+end
 local function ErrorLogEnsureFs(): boolean
     if typeof(makefolder) ~= "function" then return false end
     local ok = pcall(function()
@@ -393,6 +403,11 @@ local function ErrorLogPushMirror()
     pcall(function() ErrorMirror.Value = text end)
 end
 local function ErrorLogTrace(message, stackTrace)
+    local msg = tostring(message)
+    if ErrorLogIsForeign(msg) then
+        ErrorLog.skipped += 1
+        return
+    end
     local stamp = os.date("%H:%M:%S")
     local key = tostring(message):sub(1, 120)
     local now = os.clock()
@@ -421,7 +436,7 @@ function PastaWare.SaveErrors()
     local keys = 0
     for _ in pairs(ErrorLog.counts) do keys += 1 end
     print("[PastaWare] errors saved: " .. #ErrorLog.lines .. " lines, "
-        .. keys .. " unique -> " .. ERR_FILE .. " + Workspace/PastaWare/error.txt")
+        .. keys .. " unique (game scripts skipped: " .. tostring(ErrorLog.skipped) .. ") -> " .. ERR_FILE .. " + Workspace/PastaWare/error.txt")
 end
 function PastaWare.ClearErrorLog()
     ErrorLog.lines = {}
