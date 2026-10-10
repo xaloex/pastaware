@@ -1,7 +1,7 @@
 --!nonstrict
 --[[
     =============================================================================
-                                PASTAWARE v3.0 MEGA
+                                PASTAWARE v3.1 MEGA
                   Universal & MM2 Combat / Visuals / Movement / Farm
     =============================================================================
     Merged & Unified from:
@@ -5650,13 +5650,14 @@ do
         for _, obj in ipairs(uiRoot:GetDescendants()) do
             if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
                 pcall(function()
-                    if (obj :: TextLabel).TextScaled then return end
+                    local w: any = obj
+                    if w.TextScaled then return end
                     local base = obj:GetAttribute("_baseTS")
                     if base == nil then
-                        base = (obj :: TextLabel).TextSize
+                        base = w.TextSize
                         obj:SetAttribute("_baseTS", base)
                     end
-                    (obj :: TextLabel).TextSize = math.max(8, math.floor(base * m + 0.5))
+                    w.TextSize = math.max(8, math.floor(base * m + 0.5))
                 end)
             end
         end
@@ -5668,10 +5669,11 @@ do
         if not (obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox")) then return end
         task.defer(function()
             pcall(function()
-                if (obj :: TextLabel).TextScaled or obj:GetAttribute("_baseTS") ~= nil then return end
-                local base = (obj :: TextLabel).TextSize
+                local w: any = obj
+                if w.TextScaled or obj:GetAttribute("_baseTS") ~= nil then return end
+                local base = w.TextSize
                 obj:SetAttribute("_baseTS", base)
-                (obj :: TextLabel).TextSize = math.max(8, math.floor(base * m + 0.5))
+                w.TextSize = math.max(8, math.floor(base * m + 0.5))
             end)
         end)
     end
@@ -6292,12 +6294,14 @@ do
                     obj:Destroy()
                     return
                 end
-                if cn == "SpecialMesh" and (obj :: SpecialMesh).TextureId ~= "" then
-                    if OptTexBackup[obj] == nil then OptTexBackup[obj] = (obj :: SpecialMesh).TextureId end
-                    (obj :: SpecialMesh).TextureId = ""
-                elseif cn == "MeshPart" and (obj :: MeshPart).TextureID ~= "" then
-                    if OptTexBackup[obj] == nil then OptTexBackup[obj] = (obj :: MeshPart).TextureID end
-                    (obj :: MeshPart).TextureID = ""
+                if cn == "SpecialMesh" and obj.TextureId ~= "" then
+                    local w: any = obj
+                    if OptTexBackup[obj] == nil then OptTexBackup[obj] = w.TextureId end
+                    w.TextureId = ""
+                elseif cn == "MeshPart" and obj.TextureID ~= "" then
+                    local w: any = obj
+                    if OptTexBackup[obj] == nil then OptTexBackup[obj] = w.TextureID end
+                    w.TextureID = ""
                 end
             end
             if obj:IsA("BasePart") then
