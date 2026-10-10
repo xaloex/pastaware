@@ -1,7 +1,7 @@
 --!nonstrict
 --[[
     =============================================================================
-                                PASTAWARE v3.01 MEGA
+                                PASTAWARE v3.0 MEGA
                   Universal & MM2 Combat / Visuals / Movement / Farm
     =============================================================================
     Merged & Unified from:
@@ -345,6 +345,105 @@ local function addConnection(conn)
     table.insert(PastaWare.Connections, conn)
     return conn
 end
+
+-- Лог ошибок: файл PastaWare/error.txt (executor FS) + зеркало
+-- Workspace/PastaWare/"error.txt" (StringValue). Спам давится (1 строка/5 сек).
+local ErrorLog = { lines = {}, counts = {} }
+local ERR_FILE = "PastaWare/error.txt"
+local ErrorMirror = nil
+local function ErrorLogEnsureFs(): boolean
+    if typeof(makefolder) ~= "function" then return false end
+    local ok = pcall(function()
+        if typeof(isfolder) == "function" then
+            if not isfolder("PastaWare") then makefolder("PastaWare") end
+        else
+            makefolder("PastaWare")
+        end
+    end)
+    return ok
+end
+local function ErrorLogAppendFile(line: string)
+    if typeof(appendfile) ~= "function" then return end
+    pcall(appendfile, ERR_FILE, line .. "\n")
+end
+local function ErrorLogPushMirror()
+    if not ErrorMirror or not ErrorMirror.Parent then
+        pcall(function()
+            local folder = Workspace:FindFirstChild("PastaWare")
+            if not folder then
+                folder = Instance.new("Folder")
+                folder.Name = "PastaWare"
+                folder.Parent = Workspace
+            end
+            local v = folder:FindFirstChild("error.txt")
+            if not v then
+                v = Instance.new("StringValue")
+                v.Name = "error.txt"
+                v.Parent = folder
+            end
+            ErrorMirror = v
+        end)
+    end
+    if not ErrorMirror then return end
+    local take = {}
+    local from = math.max(1, #ErrorLog.lines - 59)
+    for i = from, #ErrorLog.lines do take[#take + 1] = ErrorLog.lines[i] end
+    local text = table.concat(take, "\n")
+    if #text > 8000 then text = text:sub(#text - 7999) end
+    pcall(function() ErrorMirror.Value = text end)
+end
+local function ErrorLogTrace(message, stackTrace)
+    local stamp = os.date("%H:%M:%S")
+    local key = tostring(message):sub(1, 120)
+    local now = os.clock()
+    local slot = ErrorLog.counts[key]
+    if slot and now - slot.last < 5 then
+        slot.count += 1
+        return
+    end
+    local count = (slot and slot.count or 0) + 1
+    ErrorLog.counts[key] = { last = now, count = count }
+    local line = string.format("[%s][x%d] %s || %s",
+        stamp, count, tostring(message), tostring(stackTrace):sub(1, 220))
+    ErrorLog.lines[#ErrorLog.lines + 1] = line
+    if #ErrorLog.lines > 200 then table.remove(ErrorLog.lines, 1) end
+    ErrorLogAppendFile(line)
+    ErrorLogPushMirror()
+    warn("[PastaWare][ERR] " .. line)
+end
+function PastaWare.SaveErrors()
+    local head = string.format("=== PastaWare v%s dump %s place=%d ===",
+        tostring(PastaWare.Version), tostring(os.date("%Y-%m-%d %H:%M:%S")), game.PlaceId)
+    if typeof(writefile) == "function" then
+        pcall(writefile, ERR_FILE, head .. "\n" .. table.concat(ErrorLog.lines, "\n") .. "\n")
+    end
+    ErrorLogPushMirror()
+    local keys = 0
+    for _ in pairs(ErrorLog.counts) do keys += 1 end
+    print("[PastaWare] errors saved: " .. #ErrorLog.lines .. " lines, "
+        .. keys .. " unique -> " .. ERR_FILE .. " + Workspace/PastaWare/error.txt")
+end
+function PastaWare.ClearErrorLog()
+    ErrorLog.lines = {}
+    ErrorLog.counts = {}
+    if typeof(writefile) == "function" then
+        pcall(writefile, ERR_FILE, "-- cleared " .. tostring(os.date()) .. "\n")
+    end
+    ErrorLogPushMirror()
+    print("[PastaWare] error log cleared.")
+end
+pcall(function()
+    ErrorLogEnsureFs()
+    ErrorLogPushMirror()
+    local head = string.format("=== PastaWare v%s session %s place=%d ===",
+        tostring(PastaWare.Version), tostring(os.date("%Y-%m-%d %H:%M:%S")), game.PlaceId)
+    ErrorLog.lines[#ErrorLog.lines + 1] = head
+    ErrorLogAppendFile(head)
+    ErrorLogPushMirror()
+    game:GetService("ScriptContext").Error:Connect(function(message, stackTrace, _sourceScript)
+        ErrorLogTrace(message, stackTrace)
+    end)
+end)
 
 
 --=============================================================================
@@ -1702,6 +1801,8 @@ local function createPastaWareUI()
         print("KnifeSpeed:", PastaWare.State.KnifeSpeed or 0)
     end)
     createButton(pMisc, "Apply Skin Now (e)", function() PastaWare.Pulse.ApplyUISkin() end)
+    createButton(pMisc, "Save Errors -> error.txt", function() PastaWare.SaveErrors() end)
+    createButton(pMisc, "Clear Error Log", function() PastaWare.ClearErrorLog() end)
     createButton(pMisc, "Unload PastaWare", function()
         PastaWare:Unload()
     end)
