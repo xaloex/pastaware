@@ -1,7 +1,7 @@
 --!nonstrict
 --[[
     =============================================================================
-                                PASTAWARE v3.0 MEGA2
+                                PASTAWARE v3.0 MEGA
                   Universal & MM2 Combat / Visuals / Movement / Farm
     =============================================================================
     Merged & Unified from:
@@ -47,7 +47,7 @@
 ]]
 
 local PastaWare = {
-    Version = "3.0.0",
+    Version = "3.0.1",
     Loaded = false,
     Connections = {},
     Drawings = {},
